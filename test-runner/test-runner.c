@@ -172,25 +172,21 @@ void boot(int cpu) {
 
     /**
      * dice_artifacts expects the following CBOR encoded structure.
+     * Since the implementation of hwbcc_get_dice_artifacts serves only the
+     * non-secure world, Bcc is not present in the returned dice_artifacts.
      * We calculate the expected size, including CBOR header sizes.
      * BccHandover = {
      *      1 : bstr .size 32,	// CDI_Attest
      *      2 : bstr .size 32,	// CDI_Seal
-     *      3 : Bcc,            // Cert_Chain
+     *      ? 3 : Bcc,            // Cert_Chain
      * }
      * Bcc = [
      *      PubKeyEd25519, // UDS (Unique Device Secret)
      *      + BccEntry,    // Root -> leaf
      *  ]
      */
-    size_t UDS_encoded_size = 45;
-    size_t bcc_entry_encoded_size = 463;
-    size_t bcc_encoded_size =
-            UDS_encoded_size + bcc_entry_encoded_size + 1 /*array header*/;
     size_t DICE_CDI_SIZE = 32;
-    size_t bcc_handover_size =
-            2 * DICE_CDI_SIZE + bcc_encoded_size +
-            8 /*map header, map keys and two 32 bytes indicators*/;
+    size_t bcc_handover_size = 2 * DICE_CDI_SIZE + 7 /*CBOR tags*/;
 
     if (resp_payload_size != bcc_handover_size) {
         log_msg("hwbcc_get_dice_artifacts failed with incorrect response size.\n");
