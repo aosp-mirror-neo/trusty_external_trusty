@@ -181,7 +181,7 @@ static void control_scan(struct virtio_console* console) {
     }
 }
 
-struct virtio_console* init_virtio_console() {
+struct virtio_console* init_virtio_console(void) {
     struct virtio_config* console_vio = virtio_probe_console();
     if (!console_vio) {
         /* We didn't find a legacy multiport console */

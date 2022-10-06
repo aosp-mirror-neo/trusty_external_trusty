@@ -42,7 +42,7 @@ int hwbcc_tipc_init(struct trusty_ipc_dev* dev) {
     return TRUSTY_ERR_NONE;
 }
 
-void hwbcc_tipc_shutdown() {
+void hwbcc_tipc_shutdown(void) {
     if (!initialized) {
         return;
     }
