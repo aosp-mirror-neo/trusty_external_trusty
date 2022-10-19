@@ -265,7 +265,7 @@ int trusty_ipc_dev_connect(struct trusty_ipc_dev* dev,
 
     /* check port name length */
     port_len = trusty_strlen(port) + 1;
-    if (port_len > (dev->buf_size - sizeof(*cmd) + sizeof(*req))) {
+    if (port_len > (dev->buf_size - sizeof(*cmd) - sizeof(*req))) {
         /* it would not fit into buffer */
         trusty_error("%s: port name is too long (%zu)\n", __func__, port_len);
         return TRUSTY_ERR_INVALID_ARGS;
