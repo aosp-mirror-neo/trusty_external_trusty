@@ -30,6 +30,9 @@ endif
 
 TRUSTY_APP_MEMBASE := 0x60000000
 
+# b/254541384, do not link with libclang_rt.builtins-arm-android.a
+TRUSTY_APP_LIBGCC :=
+
 $(eval $(call standard_name_for_arch,STANDARD_ARCH_NAME,$(ARCH),$(SUBARCH)))
 include arch/$(ARCH)/toolchain.mk
 
