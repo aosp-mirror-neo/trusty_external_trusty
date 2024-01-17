@@ -47,9 +47,9 @@ MODULE_INCLUDES += \
 	$(LOCAL_DIR)/$(ARCH)/include \
 	$(QL_TIPC)/include \
 	$(LOCAL_DIR)/../interface/include \
-	external/lk/include \
-	external/lk/include/shared/lk \
-	external/lk/lib/libc/include \
+	$(LKROOT)/include \
+	$(LKROOT)/include/shared/lk \
+	$(LKROOT)/lib/libc/include \
 
 MODULE_SRCS += \
 	$(LOCAL_DIR)/test-runner.c \
