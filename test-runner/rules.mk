@@ -64,6 +64,7 @@ MODULE_SRCS += \
 	$(QL_TIPC)/keymaster.c \
 	$(QL_TIPC)/keymaster_serializable.c \
 	$(QL_TIPC)/rpmb_proxy.c \
+	$(QL_TIPC)/secretkeeper.c \
 	$(QL_TIPC)/trusty_dev_common.c \
 	$(QL_TIPC)/util.c \
 
