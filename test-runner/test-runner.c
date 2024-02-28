@@ -31,6 +31,7 @@
 #include <trusty/hwbcc.h>
 #include <trusty/keymaster.h>
 #include <trusty/rpmb.h>
+#include <trusty/secretkeeper.h>
 #include <trusty/trusty_dev.h>
 #include <trusty/trusty_ipc.h>
 #include <utils.h>
@@ -59,6 +60,7 @@ bool starts_with(const char* str1, const char* str2, size_t str2_len) {
  * Any return from this function indicates an internal error. The caller is
  * responsible for reporting the error. It currently returns to the host with
  * 2 as the exit code.
+ * No attempt is made to clean up before returning.
  */
 void boot(int cpu) {
     int ret;
@@ -221,6 +223,56 @@ void boot(int cpu) {
     }
 
     hwbcc_tipc_shutdown();
+
+    /**
+     * Check that Secretkeeper can be connected to.
+     */
+    ret = secretkeeper_tipc_init(ipc_dev);
+    if (ret != 0) {
+        log_msg("secretkeeper_tipc_init failed.\n");
+        return;
+    }
+
+    /**
+     * Check that we can retrieve the public key and that it has the expected
+     * form.
+     */
+    uint8_t sk_identity[100];
+    size_t sk_identity_size = 0;
+    ret = secretkeeper_get_identity(sizeof(sk_identity), sk_identity,
+                                    &sk_identity_size);
+    if (ret != 0) {
+        log_msg("secretkeeper_get_identity failed.\n");
+        return;
+    }
+
+    const size_t ed25519_key_size = 32;
+    const uint8_t expected_cbor_prefix[] = {
+            // Map with 4 entries (see PubKeyEd25519)
+            0xa4,
+            // Key type: 1: 1
+            0x01, 0x01,
+            // Algorithm: 3: -8
+            0x03, 0x27,
+            // Curve: -1: 6
+            0x20, 0x06,
+            // Public key: -2, 32 byte bstr (which follows)
+            0x21, 0x58, 0x20};
+    const size_t expected_identity_size =
+            sizeof(expected_cbor_prefix) + ed25519_key_size;
+
+    if (sk_identity_size != expected_identity_size) {
+        log_msg("Unexpected sk_identity_size\n");
+        return;
+    }
+
+    if (memcmp(sk_identity, expected_cbor_prefix,
+               sizeof(expected_cbor_prefix))) {
+        log_msg("sk_identity does not start with expected prefix\n");
+        return;
+    }
+
+    secretkeeper_tipc_shutdown();
 
     ret = arch_start_secondary_cpus();
     if (ret) {
