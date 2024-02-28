@@ -56,6 +56,18 @@ void* memset(void* dest, int c, size_t count) {
     return dest;
 }
 
+int memcmp(const void* lhs, const void* rhs, size_t count) {
+    const uint8_t* l = lhs;
+    const uint8_t* r = rhs;
+    while (count--) {
+        if (*l != *r) {
+            return *l > *r ? +1 : -1;
+        }
+        ++l, ++r;
+    }
+    return 0;
+}
+
 char* strcpy(char* dest, char const* src) {
     char* ret = dest;
     while ((*dest++ = *src++) != '\0') {
