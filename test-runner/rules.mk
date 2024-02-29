@@ -47,9 +47,9 @@ MODULE_INCLUDES += \
 	$(LOCAL_DIR)/$(ARCH)/include \
 	$(QL_TIPC)/include \
 	$(LOCAL_DIR)/../interface/include \
-	external/lk/include \
-	external/lk/include/shared/lk \
-	external/lk/lib/libc/include \
+	$(LKROOT)/include \
+	$(LKROOT)/include/shared/lk \
+	$(LKROOT)/lib/libc/include \
 
 MODULE_SRCS += \
 	$(LOCAL_DIR)/test-runner.c \
@@ -64,6 +64,7 @@ MODULE_SRCS += \
 	$(QL_TIPC)/keymaster.c \
 	$(QL_TIPC)/keymaster_serializable.c \
 	$(QL_TIPC)/rpmb_proxy.c \
+	$(QL_TIPC)/secretkeeper.c \
 	$(QL_TIPC)/trusty_dev_common.c \
 	$(QL_TIPC)/util.c \
 
