@@ -75,7 +75,7 @@ vbar_setup_done:
     mov sp, x2
 
     /* Jump to c-code */
-    bl boot_arm64
+    bl boot
     /* fall-through */
 
 error:
