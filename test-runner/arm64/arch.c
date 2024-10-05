@@ -24,6 +24,7 @@
 
 #include <test-runner-arch.h>
 
+#include <assert.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -50,7 +51,7 @@
 static uint32_t doorbell_irq;
 #endif
 
-void boot_arm64(int cpu) {
+int arch_gic_init(int cpu) {
 #if GIC_VERSION > 2
     if (!cpu) {
         GICDREG_WRITE(GICD_CTLR, 2); /* Enable Non-secure group 1 interrupt */
@@ -61,11 +62,12 @@ void boot_arm64(int cpu) {
          * We only support per-cpu doorbell interrupts which are all enabled by
          * GICR_ISENABLER0.
          */
-        return;
+        return -1;
     }
     GICRREG_WRITE(cpu, GICR_ISENABLER0, 1U << doorbell_irq);
     GICRREG_WRITE(cpu, GICR_ISENABLER0, 1U << 0); /* skip_cpu0_wfi interrupt */
     __asm__ volatile("msr icc_igrpen1_el1, %0" ::"r"(1UL));
 #endif
-    boot(cpu);
+
+    return 0;
 }
