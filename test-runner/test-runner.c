@@ -81,6 +81,11 @@ void boot(int cpu) {
     struct virtio_console* console;
 
     if (cpu) {
+        ret = arch_gic_init(cpu);
+        if (ret != 0) {
+            return;
+        }
+
         while (true) {
             ret = trusty_dev_nop(&trusty_dev);
             if (ret >= 0) {
@@ -119,6 +124,11 @@ void boot(int cpu) {
 
     /* Init Trusty device */
     ret = trusty_dev_init(&trusty_dev, NULL);
+    if (ret != 0) {
+        return;
+    }
+
+    ret = arch_gic_init(cpu);
     if (ret != 0) {
         return;
     }
