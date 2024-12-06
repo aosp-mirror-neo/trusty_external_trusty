@@ -34,7 +34,7 @@
  *                                 Secretkeeper.
  */
 enum secretkeeper_cmd {
-    SECRETKEEPER_RESPONSE_MARKER = 0x1 << 31,
+    SECRETKEEPER_RESPONSE_MARKER = 0x1u << 31,
     SECRETKEEPER_CMD_GET_IDENTITY = 1,
 };
 
