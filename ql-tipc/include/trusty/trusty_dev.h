@@ -61,6 +61,11 @@ int trusty_dev_shutdown(struct trusty_dev* dev);
 int trusty_dev_nop(struct trusty_dev* dev);
 
 /*
+ * Initialize the interrupt controller
+ */
+int arch_gic_init(int cpu);
+
+/*
  * Invokes creation of queueless Trusty IPC device on the secure side.
  * @buf will be mapped into Trusty's address space.
  *
