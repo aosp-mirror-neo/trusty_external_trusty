@@ -42,11 +42,11 @@ struct trusty_dev;
 #define SMC_FCZ_FFA_RXTX_MAP \
     ((sizeof(unsigned long) <= 4) ? SMC_FC_FFA_RXTX_MAP : SMC_FC64_FFA_RXTX_MAP)
 
-static int32_t trusty_fast_call32(struct trusty_dev* dev,
-                                  uint32_t smcnr,
-                                  uint32_t a0,
-                                  uint32_t a1,
-                                  uint32_t a2) {
+int32_t trusty_fast_call32(struct trusty_dev* dev,
+                           uint32_t smcnr,
+                           uint32_t a0,
+                           uint32_t a1,
+                           uint32_t a2) {
     trusty_assert(dev);
     trusty_assert(SMC_IS_FASTCALL(smcnr));
 
