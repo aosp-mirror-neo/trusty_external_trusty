@@ -30,6 +30,7 @@
 #include <stdint.h>
 #include <trusty/smc.h>
 #include <trusty/smcall.h>
+#include <trusty/trusty_dev.h>
 
 #if GIC_VERSION > 2
 #define GICD_BASE (0x08000000)
@@ -51,11 +52,12 @@
 static uint32_t doorbell_irq;
 #endif
 
-int arch_gic_init(int cpu) {
+int arch_gic_init(struct trusty_dev* trusty_dev, int cpu) {
 #if GIC_VERSION > 2
     if (!cpu) {
         GICDREG_WRITE(GICD_CTLR, 2); /* Enable Non-secure group 1 interrupt */
-        doorbell_irq = smc(SMC_FC_GET_NEXT_IRQ, 0, TRUSTY_IRQ_TYPE_DOORBELL, 0);
+        doorbell_irq = trusty_fast_call32(trusty_dev, SMC_FC_GET_NEXT_IRQ, 0,
+                                          TRUSTY_IRQ_TYPE_DOORBELL, 0);
     }
     if (doorbell_irq >= 32) {
         /*
