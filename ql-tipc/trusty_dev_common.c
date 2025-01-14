@@ -203,7 +203,7 @@ static int trusty_init_api_version(struct trusty_dev* dev) {
     return 0;
 }
 
-static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
+int trusty_dev_init(struct trusty_dev* dev, void* priv_data) {
     int ret;
     struct smc_ret8 smc_ret;
     struct ns_mem_page_info tx_pinfo;
@@ -211,7 +211,15 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     const size_t rxtx_page_count = 1;
     trusty_assert(dev);
 
+    dev->priv_data = priv_data;
     dev->ffa_tx = NULL;
+    ret = trusty_init_api_version(dev);
+    if (ret) {
+        return ret;
+    }
+    if (dev->api_version < TRUSTY_API_VERSION_MEM_OBJ) {
+        return 0;
+    }
 
     /* Get supported FF-A version and check if it is compatible */
     smc_ret = smc8(SMC_FC_FFA_VERSION, FFA_CURRENT_VERSION, 0, 0, 0, 0, 0, 0);
@@ -256,14 +264,10 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     }
     ret = trusty_encode_page_info(&tx_pinfo, dev->ffa_tx);
     if (ret) {
-        trusty_error("%s: trusty_encode_page_info failed (%d)\n", __func__,
-                     ret);
         goto err_encode_page_info;
     }
     ret = trusty_encode_page_info(&rx_pinfo, dev->ffa_rx);
     if (ret) {
-        trusty_error("%s: trusty_encode_page_info failed (%d)\n", __func__,
-                     ret);
         goto err_encode_page_info;
     }
 
@@ -283,7 +287,7 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     if (ret) {
         goto err_setup_msg_buf;
     }
-    return true;
+    return 0;
 
 err_setup_msg_buf:
 err_rxtx_map:
@@ -293,26 +297,7 @@ err_alloc_ffa_tx:
 err_id_get:
 err_features:
 err_version:
-    return false;
-}
-
-int trusty_dev_init(struct trusty_dev* dev, void* priv_data) {
-    bool found_ffa;
-    int ret;
-    trusty_assert(dev);
-
-    dev->priv_data = priv_data;
-    found_ffa = trusty_dev_ffa_init(dev);
-
-    ret = trusty_init_api_version(dev);
-    if (ret) {
-        return ret;
-    }
-    if (dev->api_version >= TRUSTY_API_VERSION_MEM_OBJ && !found_ffa) {
-        trusty_fatal("%s: FF-A required but not found\n", __func__);
-    }
-
-    return 0;
+    trusty_fatal("%s: init failed\n", __func__, ret);
 }
 
 int trusty_dev_shutdown(struct trusty_dev* dev) {
