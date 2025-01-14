@@ -55,8 +55,6 @@
 
 #define FFA_PAGE_SIZE (4096)
 
-#define FFA_PACK_RXTX_UNMAP_ID(vm_id) (((uint32_t)vm_id << 16) | 0)
-
 /**
  * typedef ffa_endpoint_id16_t - Endpoint ID
  *
