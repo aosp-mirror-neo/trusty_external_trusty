@@ -34,6 +34,8 @@ struct trusty_dev;
 
 #define LOCAL_LOG 0
 
+#define TRUSTY_FFA_RXTX_PAGE_COUNT 1
+
 /*
  * Select RXTX map smc variant based on register size. Note that the FF-A spec
  * does not support passing a 64 bit paddr from a 32 bit client, so the
@@ -208,7 +210,6 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     struct smc_ret8 smc_ret;
     struct ns_mem_page_info tx_pinfo;
     struct ns_mem_page_info rx_pinfo;
-    const size_t rxtx_page_count = 1;
     trusty_assert(dev);
 
     dev->ffa_tx = NULL;
@@ -246,11 +247,11 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     dev->ffa_local_id = smc_ret.r2;
     dev->ffa_remote_id = 0x8000;
 
-    dev->ffa_tx = trusty_alloc_pages(rxtx_page_count);
+    dev->ffa_tx = trusty_alloc_pages(TRUSTY_FFA_RXTX_PAGE_COUNT);
     if (!dev->ffa_tx) {
         goto err_alloc_ffa_tx;
     }
-    dev->ffa_rx = trusty_alloc_pages(rxtx_page_count);
+    dev->ffa_rx = trusty_alloc_pages(TRUSTY_FFA_RXTX_PAGE_COUNT);
     if (!dev->ffa_rx) {
         goto err_alloc_ffa_rx;
     }
@@ -273,23 +274,25 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
      */
 
     smc_ret = smc8(SMC_FCZ_FFA_RXTX_MAP, tx_pinfo.paddr, rx_pinfo.paddr,
-                   rxtx_page_count, 0, 0, 0, 0);
+                   TRUSTY_FFA_RXTX_PAGE_COUNT, 0, 0, 0, 0);
     if (smc_ret.r0 != SMC_FC_FFA_SUCCESS) {
         trusty_error("%s: FFA_RXTX_MAP failed 0x%lx 0x%lx 0x%lx\n", __func__,
                      smc_ret.r0, smc_ret.r1, smc_ret.r2);
         goto err_rxtx_map;
     }
 
-    if (ret) {
-        goto err_setup_msg_buf;
-    }
     return true;
 
-err_setup_msg_buf:
 err_rxtx_map:
 err_encode_page_info:
+    trusty_free_pages(dev->ffa_rx, TRUSTY_FFA_RXTX_PAGE_COUNT);
+    dev->ffa_rx = NULL;
 err_alloc_ffa_rx:
+    trusty_free_pages(dev->ffa_tx, TRUSTY_FFA_RXTX_PAGE_COUNT);
+    dev->ffa_tx = NULL;
 err_alloc_ffa_tx:
+    dev->ffa_remote_id = 0;
+    dev->ffa_local_id = 0;
 err_id_get:
 err_features:
 err_version:
@@ -319,7 +322,15 @@ int trusty_dev_shutdown(struct trusty_dev* dev) {
     trusty_assert(dev);
 
     if (dev->ffa_tx) {
-        smc(SMC_FC_FFA_RXTX_UNMAP, 0, 0, 0);
+        smc(SMC_FC_FFA_RXTX_UNMAP, FFA_PACK_RXTX_UNMAP_ID(dev->ffa_local_id), 0,
+            0);
+
+        trusty_free_pages(dev->ffa_rx, TRUSTY_FFA_RXTX_PAGE_COUNT);
+        dev->ffa_rx = NULL;
+        trusty_free_pages(dev->ffa_tx, TRUSTY_FFA_RXTX_PAGE_COUNT);
+        dev->ffa_tx = NULL;
+        dev->ffa_local_id = 0;
+        dev->ffa_remote_id = 0;
     }
     dev->priv_data = NULL;
     return 0;
