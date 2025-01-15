@@ -299,6 +299,9 @@ struct ffa_partition_info {
     uint32_t properties;
 };
 
+/* partition property: Supports receipt of direct requests */
+#define FFA_PARTITION_DIRECT_REQ_RECV (1U << 0)
+
 /**
  * typedef ffa_features2_t - FFA_FEATURES values returned in w2
  *
@@ -522,6 +525,41 @@ enum ffa_error {
  * * w2:     ID in bit[15:0], bit[31:16] must be 0.
  */
 #define SMC_FC_FFA_ID_GET SMC_FASTCALL_NR_SHARED_MEMORY(0x69)
+
+/**
+ * SMC_FC_FFA_MSG_SEND_DIRECT_REQ - 32 bit SMC opcode to send message as a
+ * request to a receiver endpoint.
+ *
+ * Register arguments
+ * * w1:     Sender and Receiver endpoint IDs.
+ * * w2:     Message flags.
+ *           bit[31]   : Message type. 0 for partition message and 1 for
+ *                       framework message.
+ *           bit[30:8] : Reserved. Must be 0.
+ *           bit[7:0]  : Framework message type. Must be 0 if partition message.
+ * * w3-w7:  Implementation defined.
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_MSG_SEND_DIRECT_RESP or &SMC_FC_FFA_INTERRUPT or
+ *           &SMC_FC_FFA_SUCCESS
+ */
+#define SMC_FC_FFA_MSG_SEND_DIRECT_REQ SMC_FASTCALL_NR_SHARED_MEMORY(0x6F)
+
+/**
+ * SMC_FC_FFA_MSG_SEND_DIRECT_RESP - 32 SMC opcode to send message as a response
+ * to a target endpoint.
+ *
+ * Register arguments:
+ *
+ * * w1:     Sender ID in bit[31:16], receiver ID in [15:0]
+ * * w2:     Message Flags.
+ *           bit[31]   : Message type. 0 for partition message and 1 for
+ *                       framework message.
+ *           bit[30:8] : Reserved. Must be 0.
+ *           bit[7:0]  : Framework message type. Must be 0 if partition message.
+ * * w3-w7:  Implementation defined.
+ */
+#define SMC_FC_FFA_MSG_SEND_DIRECT_RESP SMC_FASTCALL_NR_SHARED_MEMORY(0x70)
 
 /**
  * SMC_FC_FFA_MEM_DONATE - 32 bit SMC opcode to donate memory

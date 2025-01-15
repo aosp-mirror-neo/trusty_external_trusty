@@ -228,6 +228,7 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     trusty_assert(dev);
 
     dev->ffa_tx = NULL;
+    dev->ffa_supports_direct_recv = false;
 
     /* Get supported FF-A version and check if it is compatible */
     smc_ret = smc8(SMC_FC_FFA_VERSION, FFA_CURRENT_VERSION, 0, 0, 0, 0, 0, 0);
@@ -307,6 +308,7 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
          * use hard-coded values for backward compatibility
          */
         dev->ffa_remote_id = 0x8000;
+        dev->ffa_supports_direct_recv = false;
     } else if ((uint32_t)smc_ret.r0 != SMC_FC_FFA_SUCCESS || smc_ret.r2 != 1) {
         trusty_error(
                 "%s: SMC_FC_FFA_PARTITION_INFO_GET failed 0x%lx 0x%lx 0x%lx\n",
@@ -316,6 +318,8 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
         struct ffa_partition_info* part_info = dev->ffa_rx;
 
         dev->ffa_remote_id = part_info->id;
+        dev->ffa_supports_direct_recv =
+                !!(part_info->id & FFA_PARTITION_DIRECT_REQ_RECV);
 
         /* release ownership of the receive buffer */
         smc_ret = smc8(SMC_FC_FFA_RX_RELEASE, 0, 0, 0, 0, 0, 0, 0);
@@ -326,9 +330,31 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
         }
     }
 
+    if (dev->ffa_supports_direct_recv) {
+        /* Check that direct message support is implemented */
+        smc_ret = smc8(SMC_FC_FFA_FEATURES, SMC_FC_FFA_MSG_SEND_DIRECT_REQ, 0,
+                       0, 0, 0, 0, 0);
+        if ((uint32_t)smc_ret.r0 == SMC_FC_FFA_ERROR &&
+            (int32_t)smc_ret.r2 == FFA_ERROR_NOT_SUPPORTED) {
+            /*
+             * The partition info said Trusty supports direct messages,
+             * but EL3 does not (e.g. it's running the SPD) so disable them.
+             */
+            dev->ffa_supports_direct_recv = false;
+        } else if ((uint32_t)smc_ret.r0 != SMC_FC_FFA_SUCCESS) {
+            trusty_error(
+                    "%s: SMC_FC_FFA_FEATURES(SMC_FC_FFA_MSG_SEND_DIRECT_REQ) "
+                    "failed 0x%lx 0x%lx 0x%lx\n",
+                    __func__, smc_ret.r0, smc_ret.r1, smc_ret.r2);
+            goto err_features_direct_req;
+        }
+    }
+
     return true;
 
+err_features_direct_req:
 err_rx_release:
+    dev->ffa_supports_direct_recv = false;
     dev->ffa_remote_id = 0;
 err_part_info_get:
     smc(SMC_FC_FFA_RXTX_UNMAP, FFA_PACK_RXTX_UNMAP_ID(dev->ffa_local_id), 0, 0);
@@ -379,6 +405,7 @@ int trusty_dev_shutdown(struct trusty_dev* dev) {
         dev->ffa_tx = NULL;
         dev->ffa_local_id = 0;
         dev->ffa_remote_id = 0;
+        dev->ffa_supports_direct_recv = false;
     }
     dev->priv_data = NULL;
     return 0;
