@@ -44,6 +44,13 @@ struct trusty_dev;
 #define SMC_FCZ_FFA_RXTX_MAP \
     ((sizeof(unsigned long) <= 4) ? SMC_FC_FFA_RXTX_MAP : SMC_FC64_FFA_RXTX_MAP)
 
+__attribute__((weak)) unsigned long trusty_get_cpu_num(void) {
+    trusty_fatal(
+            "%s: weak default called, "
+            "might return the wrong CPU number\n",
+            __func__);
+}
+
 int32_t trusty_fast_call32(struct trusty_dev* dev,
                            uint32_t smcnr,
                            uint32_t a0,
