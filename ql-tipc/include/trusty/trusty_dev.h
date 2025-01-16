@@ -42,6 +42,7 @@ struct trusty_dev {
     uint16_t ffa_remote_id;
     void* ffa_tx;
     void* ffa_rx;
+    bool ffa_supports_direct_recv;
 };
 
 /*
