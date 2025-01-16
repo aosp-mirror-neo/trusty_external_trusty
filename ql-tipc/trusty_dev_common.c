@@ -44,6 +44,13 @@ struct trusty_dev;
 #define SMC_FCZ_FFA_RXTX_MAP \
     ((sizeof(unsigned long) <= 4) ? SMC_FC_FFA_RXTX_MAP : SMC_FC64_FFA_RXTX_MAP)
 
+__attribute__((weak)) unsigned long trusty_get_cpu_num(void) {
+    trusty_fatal(
+            "%s: weak default called, "
+            "might return the wrong CPU number\n",
+            __func__);
+}
+
 int32_t trusty_fast_call32(struct trusty_dev* dev,
                            uint32_t smcnr,
                            uint32_t a0,
@@ -205,6 +212,14 @@ static int trusty_init_api_version(struct trusty_dev* dev) {
     return 0;
 }
 
+/*
+ * Trusty UUID: RFC-4122 compliant UUID version 4
+ * 40ee25f0-a2bc-304c-8c4ca173c57d8af1
+ * Trusty UUID used for partition info get call
+ */
+static const uint32_t trusty_uuid0_4[4] = {0xf025ee40, 0x4c30bca2, 0x73a14c8c,
+                                           0xf18a7dc5};
+
 static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
     int ret;
     struct smc_ret8 smc_ret;
@@ -234,9 +249,6 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
 
     /*
      * Set FF-A endpoint IDs.
-     *
-     * Hardcode 0x8000 for the secure os.
-     * TODO: Use FFA call or device tree to configure this dynamically
      */
     smc_ret = smc8(SMC_FC_FFA_ID_GET, 0, 0, 0, 0, 0, 0, 0);
     if (smc_ret.r0 != SMC_FC_FFA_SUCCESS) {
@@ -245,7 +257,6 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
         goto err_id_get;
     }
     dev->ffa_local_id = smc_ret.r2;
-    dev->ffa_remote_id = 0x8000;
 
     dev->ffa_tx = trusty_alloc_pages(TRUSTY_FFA_RXTX_PAGE_COUNT);
     if (!dev->ffa_tx) {
@@ -281,8 +292,46 @@ static bool trusty_dev_ffa_init(struct trusty_dev* dev) {
         goto err_rxtx_map;
     }
 
+    /*
+     * Set remote FF-A endpoint IDs.
+     *
+     * This queries Trusty SP based on its UUID
+     */
+    smc_ret = smc8(SMC_FC_FFA_PARTITION_INFO_GET, trusty_uuid0_4[0],
+                   trusty_uuid0_4[1], trusty_uuid0_4[2], trusty_uuid0_4[3], 0,
+                   0, 0);
+    if ((uint32_t)smc_ret.r0 == SMC_FC_FFA_ERROR &&
+        (int32_t)smc_ret.r2 == FFA_ERROR_NOT_SUPPORTED) {
+        /*
+         * This interface is not supported,
+         * use hard-coded values for backward compatibility
+         */
+        dev->ffa_remote_id = 0x8000;
+    } else if ((uint32_t)smc_ret.r0 != SMC_FC_FFA_SUCCESS || smc_ret.r2 != 1) {
+        trusty_error(
+                "%s: SMC_FC_FFA_PARTITION_INFO_GET failed 0x%lx 0x%lx 0x%lx\n",
+                __func__, smc_ret.r0, smc_ret.r1, smc_ret.r2);
+        goto err_part_info_get;
+    } else {
+        struct ffa_partition_info* part_info = dev->ffa_rx;
+
+        dev->ffa_remote_id = part_info->id;
+
+        /* release ownership of the receive buffer */
+        smc_ret = smc8(SMC_FC_FFA_RX_RELEASE, 0, 0, 0, 0, 0, 0, 0);
+        if ((uint32_t)smc_ret.r0 != SMC_FC_FFA_SUCCESS) {
+            trusty_error("%s: SMC_FC_FFA_RX_RELEASE failed 0x%lx 0x%lx 0x%lx\n",
+                         __func__, smc_ret.r0, smc_ret.r1, smc_ret.r2);
+            goto err_rx_release;
+        }
+    }
+
     return true;
 
+err_rx_release:
+    dev->ffa_remote_id = 0;
+err_part_info_get:
+    smc(SMC_FC_FFA_RXTX_UNMAP, FFA_PACK_RXTX_UNMAP_ID(dev->ffa_local_id), 0, 0);
 err_rxtx_map:
 err_encode_page_info:
     trusty_free_pages(dev->ffa_rx, TRUSTY_FFA_RXTX_PAGE_COUNT);
@@ -291,7 +340,6 @@ err_alloc_ffa_rx:
     trusty_free_pages(dev->ffa_tx, TRUSTY_FFA_RXTX_PAGE_COUNT);
     dev->ffa_tx = NULL;
 err_alloc_ffa_tx:
-    dev->ffa_remote_id = 0;
     dev->ffa_local_id = 0;
 err_id_get:
 err_features:

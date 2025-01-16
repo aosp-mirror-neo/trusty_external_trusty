@@ -66,6 +66,8 @@ struct trusty_dev;
  */
 void trusty_lock(struct trusty_dev* dev);
 void trusty_unlock(struct trusty_dev* dev);
+/* Get the current CPU id */
+unsigned long trusty_get_cpu_num(void);
 /*
  * Disable/enable IRQ interrupts and save/restore @state
  */
