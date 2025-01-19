@@ -55,6 +55,8 @@
 
 #define FFA_PAGE_SIZE (4096)
 
+#define FFA_PACK_RXTX_UNMAP_ID(vm_id) (((uint32_t)vm_id << 16) | 0)
+
 /**
  * typedef ffa_endpoint_id16_t - Endpoint ID
  *
@@ -282,6 +284,22 @@ struct ffa_mem_relinquish_descriptor {
 STATIC_ASSERT(sizeof(struct ffa_mem_relinquish_descriptor) == 16);
 
 /**
+ * struct ffa_partition_info - FFA partition info descriptor.
+ * @id:
+ *         16-bit ID of the partition
+ * @execution_ctx_count:
+ *         Number of execution contexts implemented by this partition
+ * @properties:
+ *         Flags to determine partition properties. Like direct/indirect
+ *         messages send/receive capabilities.
+ */
+struct ffa_partition_info {
+    uint16_t id;
+    uint16_t execution_ctx_count;
+    uint32_t properties;
+};
+
+/**
  * typedef ffa_features2_t - FFA_FEATURES values returned in w2
  *
  * * @FFA_FEATURES2_RXTX_MAP_BUF_SIZE_MASK
@@ -431,6 +449,20 @@ enum ffa_error {
 #define SMC_FC_FFA_FEATURES SMC_FASTCALL_NR_SHARED_MEMORY(0x64)
 
 /**
+ * SMC_FC_FFA_RX_RELEASE - SMC opcode to Relinquish ownership of a RX buffer
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_SUCCESS
+ *
+ * or
+ *
+ * * w0:     &SMC_FC_FFA_ERROR
+ * * w2:     %FFA_ERROR_DENIED Caller did not have ownership of the RX buffer.
+ *           %FFA_ERROR_NOT_SUPPORTED if operation not supported
+ */
+#define SMC_FC_FFA_RX_RELEASE SMC_FASTCALL_NR_SHARED_MEMORY(0x65)
+
+/**
  * SMC_FC_FFA_RXTX_MAP - 32 bit SMC opcode to map message buffers
  *
  * Register arguments:
@@ -469,6 +501,18 @@ enum ffa_error {
  * * w0:     &SMC_FC_FFA_SUCCESS
  */
 #define SMC_FC_FFA_RXTX_UNMAP SMC_FASTCALL_NR_SHARED_MEMORY(0x67)
+
+/**
+ * SMC_FC_FFA_PARTITION_INFO_GET - SMC opcode to get partition details
+ *
+ * Register arguments:
+ * * w1-w4:  Partition's UUID
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_SUCCESS
+ * * w2:     ID in bit[15:0], bit[31:16] must be 0.
+ */
+#define SMC_FC_FFA_PARTITION_INFO_GET SMC_FASTCALL_NR_SHARED_MEMORY(0x68)
 
 /**
  * SMC_FC_FFA_ID_GET - SMC opcode to get endpoint id of caller

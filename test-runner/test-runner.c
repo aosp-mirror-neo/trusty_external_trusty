@@ -81,7 +81,7 @@ void boot(int cpu) {
     struct virtio_console* console;
 
     if (cpu) {
-        ret = arch_gic_init(cpu);
+        ret = arch_gic_init(&trusty_dev, cpu);
         if (ret != 0) {
             return;
         }
@@ -128,7 +128,7 @@ void boot(int cpu) {
         return;
     }
 
-    ret = arch_gic_init(cpu);
+    ret = arch_gic_init(&trusty_dev, cpu);
     if (ret != 0) {
         return;
     }

@@ -150,6 +150,11 @@ wfi:
 no_wfi:
     ret
 
+.global trusty_get_cpu_num
+trusty_get_cpu_num:
+    get_cpu_num x0
+    ret
+
 #if GIC_VERSION > 2
 .globl trusty_local_irq_disable
 trusty_local_irq_disable:

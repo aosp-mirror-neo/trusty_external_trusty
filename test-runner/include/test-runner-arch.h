@@ -66,3 +66,10 @@ void boot(int cpu);
  * Boot next operating system.
  */
 void boot_next(void);
+
+struct trusty_dev;
+
+/*
+ * Initialize the interrupt controller
+ */
+int arch_gic_init(struct trusty_dev* trusty_dev, int cpu);
