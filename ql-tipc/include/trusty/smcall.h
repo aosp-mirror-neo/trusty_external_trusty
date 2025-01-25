@@ -159,4 +159,83 @@
     SMC_STDCALL_NR(SMC_ENTITY_TRUSTED_OS, 32)
 #define SMC_FC_HANDLE_QL_TIPC_DEV_CMD SMC_FASTCALL_NR(SMC_ENTITY_TRUSTED_OS, 32)
 
+/**
+ * TRUSTY_FFA_MSG_RUN_FASTCALL - Run a Trusty fastcall synchronously.
+ *
+ * @r3: The value of %TRUSTY_FFA_MSG_RUN_FASTCALL.
+ * @r4: The fid of the Trusty fastcall.
+ * @r5: The 1st argument of the fastcall.
+ * @r6: The 2nd argument of the fastcall.
+ * @r7: The 3rd argument of the fastcall.
+ *
+ * Execute a Trusty fastcall synchronously with interrupts disabled,
+ * blocking until it completes and returning its result directly
+ * as a direct message response.
+ */
+#define TRUSTY_FFA_MSG_RUN_FASTCALL (0)
+
+/**
+ * TRUSTY_FFA_MSG_QUEUE_STDCALL - Asynchronously queue a Trusty stdcall.
+ *
+ * @r3: The value of %TRUSTY_FFA_MSG_QUEUE_STDCALL.
+ * @r4: The fid of the Trusty stdcall.
+ * @r5: The 1st argument of the stdcall.
+ * @r6: The 2nd argument of the stdcall.
+ * @r7: The 3rd argument of the stdcall.
+ *
+ * Queue a Trusty stdcall asynchronously for execution in the stdcall thread.
+ * The non-secure world should assign cycles to Trusty separately and
+ * call %TRUSTY_FFA_MSG_GET_STDCALL_RET to check if the call completed.
+ *
+ * Returns 0 on success, or %SM_ERR_BUSY if Trusty has another queued stdcall.
+ */
+#define TRUSTY_FFA_MSG_QUEUE_STDCALL (1)
+
+/**
+ * TRUSTY_FFA_MSG_GET_STDCALL_RET - Get the result of a Trusty stdcall.
+ *
+ * @r3: [out] The result of the call.
+ *
+ * The non-secure world should call this interface to
+ * retrieve the result of a previously queued stdcall.
+ * The request will return %SM_ERR_CPU_IDLE if the stdcall is still running.
+ */
+#define TRUSTY_FFA_MSG_GET_STDCALL_RET (2)
+
+/**
+ * TRUSTY_FFA_MSG_RUN_NOPCALL - Run the Trusty handler for a nopcall.
+ *
+ * @r3: The value of %TRUSTY_FFA_MSG_RUN_NOPCALL.
+ * @r4: The 1st argument of the nopcall.
+ * @r5: The 2nd argument of the nopcall.
+ * @r6: The 3rd argument of the nopcall.
+ *
+ * Returns 0 in @r3 on success, or one of the libsm error codes
+ * in case of failure.
+ *
+ * Execute a Trusty nopcall handler synchronously with interrupts disabled,
+ * blocking until it completes and returning its result directly
+ * as a direct message response. If Trusty should get more cycles to run
+ * the second half of the nopcall (triggered by the handler), it should
+ * signal the primary scheduler to enqueue a Trusty NOP.
+ */
+#define TRUSTY_FFA_MSG_RUN_NOPCALL (3)
+
+/**
+ * TRUSTY_FFA_MSG_IS_IDLE - Check if Trusty is idle on the current CPU.
+ *
+ * Return:
+ * * 1 in @r3 if the current CPU is idle
+ * * 0 if Trusty is busy (e.g. was interrupted)
+ * * One of the libsm error codes in case of error
+ *
+ * The non-secure scheduler needs to know if Trusty is idle to determine
+ * whether to give it more CPU cycles when it gets preempted. On Linux,
+ * we use the shadow priority but that requires sharing the sched-share state
+ * between NS and Trusty. %TRUSTY_FFA_MSG_IS_IDLE is a backup direct message
+ * that returns the same information to environments where this structure
+ * is not already shared, e.g., in bootloaders.
+ */
+#define TRUSTY_FFA_MSG_IS_IDLE (4)
+
 #endif /* QL_TIPC_SMCALL_H_ */
