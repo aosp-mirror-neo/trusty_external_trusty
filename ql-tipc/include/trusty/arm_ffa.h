@@ -55,6 +55,9 @@
 
 #define FFA_PAGE_SIZE (4096)
 
+#define FFA_PACK_SRC_DST(src_id, dst_id) (((uint32_t)src_id << 16) | dst_id)
+#define FFA_PACK_DST_CPU(dst_id, cpu_id) (((uint32_t)dst_id << 16) | cpu_id)
+
 #define FFA_PACK_RXTX_UNMAP_ID(vm_id) (((uint32_t)vm_id << 16) | 0)
 
 /**
@@ -411,6 +414,16 @@ enum ffa_error {
 #define SMC_FC64_FFA_SUCCESS SMC_FASTCALL64_NR_SHARED_MEMORY(0x61)
 
 /**
+ * SMC_FC_FFA_INTERRUPT - 32 bit SMC for FFA interrupt opcode
+ *
+ * Register arguments:
+ *
+ * * w1:     VMID in [31:16], vCPU in [15:0]
+ * * w2:     Interrupt ID
+ */
+#define SMC_FC_FFA_INTERRUPT SMC_FASTCALL_NR_SHARED_MEMORY(0x62)
+
+/**
  * SMC_FC_FFA_VERSION - SMC opcode to return supported FF-A version
  *
  * Register arguments:
@@ -525,6 +538,27 @@ enum ffa_error {
  * * w2:     ID in bit[15:0], bit[31:16] must be 0.
  */
 #define SMC_FC_FFA_ID_GET SMC_FASTCALL_NR_SHARED_MEMORY(0x69)
+
+/**
+ * SMC_FC_FFA_MSG_WAIT - 32 bit SMC opcode to used by the Receiver when
+ * it transfers execution back to the Sender.
+ *
+ * Register arguments:
+ * * w2:     Flags
+ */
+#define SMC_FC_FFA_MSG_WAIT SMC_FASTCALL_NR_SHARED_MEMORY(0x6B)
+
+/**
+ * SMC_FC_FFA_RUN - 32 bit SMC opcode to used by the Sender to resume a
+ * preempted Receiver.
+ *
+ * Register arguments:
+ * * w1:     Information to identify target SP/VM.
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_SUCCESS, &SMC_FC_FFA_MSG_WAIT, or &SMC_FC_FFA_ERROR
+ */
+#define SMC_FC_FFA_RUN SMC_FASTCALL_NR_SHARED_MEMORY(0x6D)
 
 /**
  * SMC_FC_FFA_MSG_SEND_DIRECT_REQ - 32 bit SMC opcode to send message as a
