@@ -51,6 +51,156 @@ __attribute__((weak)) unsigned long trusty_get_cpu_num(void) {
             __func__);
 }
 
+static int trusty_ffa_send_direct_msg(struct trusty_dev* dev,
+                                      unsigned long msg,
+                                      unsigned long a0,
+                                      unsigned long a1,
+                                      unsigned long a2,
+                                      unsigned long a3) {
+    struct smc_ret8 smc_ret;
+    uint32_t src_dst;
+
+    src_dst = FFA_PACK_SRC_DST(dev->ffa_local_id, dev->ffa_remote_id);
+
+    /* 32bit FFA call for direct message request/response */
+    smc_ret = smc8(SMC_FC_FFA_MSG_SEND_DIRECT_REQ, src_dst, 0, msg, a0, a1, a2,
+                   a3);
+
+    switch ((uint32_t)smc_ret.r0) {
+    case SMC_FC_FFA_INTERRUPT:
+        /*
+         * Trusty supports managed exit so it should return from an interrupt
+         * cleanly. We should never see an FFA_INTERRUPT here.
+         */
+        trusty_error("unexpected FFA_INTERRUPT(0x%x, 0x%x)\n",
+                     (uint32_t)smc_ret.r1, (uint32_t)smc_ret.r2);
+        return SM_ERR_INTERNAL_FAILURE;
+
+    case SMC_FC_FFA_ERROR:
+        trusty_error("unexpected FFA_ERROR(0x%x, 0x%x)\n", (uint32_t)smc_ret.r1,
+                     (uint32_t)smc_ret.r2);
+        return SM_ERR_INTERNAL_FAILURE;
+
+    case SMC_FC_FFA_MSG_SEND_DIRECT_RESP:
+        return smc_ret.r3;
+
+    default:
+        trusty_error("unknown FF-A result: 0x%x\n", (uint32_t)smc_ret.r0);
+        return SM_ERR_INTERNAL_FAILURE;
+    }
+}
+
+static int trusty_ffa_run(struct trusty_dev* dev) {
+    struct smc_ret8 smc_ret;
+    uint32_t dst_cpu;
+
+    dst_cpu = FFA_PACK_DST_CPU(dev->ffa_remote_id,
+                               (uint16_t)trusty_get_cpu_num());
+
+    smc_ret = smc8(SMC_FC_FFA_RUN, dst_cpu, 0, 0, 0, 0, 0, 0);
+
+    switch ((uint32_t)smc_ret.r0) {
+    case SMC_FC_FFA_INTERRUPT:
+        /*
+         * Trusty supports managed exit so it should return from an interrupt
+         * cleanly. We should never see an FFA_INTERRUPT here.
+         */
+        trusty_error("unexpected FFA_INTERRUPT(0x%x, 0x%x)\n",
+                     (uint32_t)smc_ret.r1, (uint32_t)smc_ret.r2);
+        return SM_ERR_INTERNAL_FAILURE;
+
+    case SMC_FC_FFA_ERROR:
+        trusty_error("unexpected FFA_ERROR(0x%x, 0x%x)\n", (uint32_t)smc_ret.r1,
+                     (uint32_t)smc_ret.r2);
+        return SM_ERR_INTERNAL_FAILURE;
+
+    case SMC_FC_FFA_SUCCESS:
+    case SMC_FC_FFA_MSG_WAIT:
+        return trusty_ffa_send_direct_msg(dev, TRUSTY_FFA_MSG_IS_IDLE, 0, 0, 0,
+                                          0);
+
+    default:
+        trusty_error("unknown FF-A result: 0x%x\n", (uint32_t)smc_ret.r0);
+        return SM_ERR_INTERNAL_FAILURE;
+    }
+}
+
+static uint32_t trusty_ffa_call(struct trusty_dev* dev,
+                                unsigned long fid,
+                                unsigned long a0,
+                                unsigned long a1,
+                                unsigned long a2) {
+    int ret;
+
+    if (SMC_IS_FASTCALL(fid)) {
+        return trusty_ffa_send_direct_msg(dev, TRUSTY_FFA_MSG_RUN_FASTCALL, fid,
+                                          a0, a1, a2);
+    }
+
+    if (fid == SMC_SC_NOP) {
+        if (a0) {
+            ret = trusty_ffa_send_direct_msg(dev, TRUSTY_FFA_MSG_RUN_NOPCALL,
+                                             a0, a1, a2, 0);
+            if (ret) {
+                return ret;
+            }
+        }
+
+        ret = trusty_ffa_run(dev);
+        switch (ret) {
+        case 1:
+            /* Trusty is idle, we are done */
+            return SM_ERR_NOP_DONE;
+        case 0:
+            /* Trusty has more work to do, keep running it */
+            return SM_ERR_NOP_INTERRUPTED;
+        default:
+            return ret;
+        }
+    }
+
+    if (fid != SMC_SC_RESTART_LAST) {
+        ret = trusty_ffa_send_direct_msg(dev, TRUSTY_FFA_MSG_QUEUE_STDCALL, fid,
+                                         a0, a1, a2);
+        if (ret) {
+            return ret;
+        }
+
+        /*
+         * Trusty sends us the IPI after queuing a new stdcall.
+         * Unlike Linux which has a handler and enqueues a NOP in that case,
+         * we do not handle that interrupt so we need to call FFA_RUN manually.
+         */
+    }
+
+    ret = trusty_ffa_run(dev);
+    switch (ret) {
+    case 1:
+        /* Trusty is actually idle now, get the stdcall return value */
+        return trusty_ffa_send_direct_msg(dev, TRUSTY_FFA_MSG_GET_STDCALL_RET,
+                                          0, 0, 0, 0);
+    case 0:
+        /* Keep running Trusty without executing WFI until it becomes idle */
+        return SM_ERR_INTERRUPTED;
+    default:
+        return ret;
+    }
+}
+
+static int32_t trusty_call32(struct trusty_dev* dev,
+                             uint32_t smcnr,
+                             uint32_t a0,
+                             uint32_t a1,
+                             uint32_t a2) {
+    trusty_assert(dev);
+
+    if (dev->ffa_supports_direct_recv) {
+        return trusty_ffa_call(dev, smcnr, a0, a1, a2);
+    } else {
+        return smc(smcnr, a0, a1, a2);
+    }
+}
+
 int32_t trusty_fast_call32(struct trusty_dev* dev,
                            uint32_t smcnr,
                            uint32_t a0,
@@ -59,7 +209,7 @@ int32_t trusty_fast_call32(struct trusty_dev* dev,
     trusty_assert(dev);
     trusty_assert(SMC_IS_FASTCALL(smcnr));
 
-    return smc(smcnr, a0, a1, a2);
+    return trusty_call32(dev, smcnr, a0, a1, a2);
 }
 
 static unsigned long trusty_std_call_inner(struct trusty_dev* dev,
@@ -73,9 +223,9 @@ static unsigned long trusty_std_call_inner(struct trusty_dev* dev,
     trusty_debug("%s(0x%lx 0x%lx 0x%lx 0x%lx)\n", __func__, smcnr, a0, a1, a2);
 
     while (true) {
-        ret = smc(smcnr, a0, a1, a2);
+        ret = trusty_call32(dev, smcnr, a0, a1, a2);
         while ((int32_t)ret == SM_ERR_FIQ_INTERRUPTED)
-            ret = smc(SMC_SC_RESTART_FIQ, 0, 0, 0);
+            ret = trusty_call32(dev, SMC_SC_RESTART_FIQ, 0, 0, 0);
         if ((int)ret != SM_ERR_BUSY || !retry)
             break;
 
