@@ -42,6 +42,7 @@ struct trusty_dev {
     uint16_t ffa_remote_id;
     void* ffa_tx;
     void* ffa_rx;
+    bool ffa_supports_direct_recv;
 };
 
 /*
@@ -60,10 +61,22 @@ int trusty_dev_shutdown(struct trusty_dev* dev);
  */
 int trusty_dev_nop(struct trusty_dev* dev);
 
-/*
- * Initialize the interrupt controller
+/**
+ * trusty_fast_call32() - Do a fastcall into Trusty.
+ *
+ * @dev:   trusty device, initialized with trusty_dev_init
+ * @smcnr: SMC fid number
+ * @a0:    1st argument
+ * @a1:    2nd argument
+ * @a2:    3rd argument
+ *
+ * Return: libsm error code.
  */
-int arch_gic_init(int cpu);
+int32_t trusty_fast_call32(struct trusty_dev* dev,
+                           uint32_t smcnr,
+                           uint32_t a0,
+                           uint32_t a1,
+                           uint32_t a2);
 
 /*
  * Invokes creation of queueless Trusty IPC device on the secure side.

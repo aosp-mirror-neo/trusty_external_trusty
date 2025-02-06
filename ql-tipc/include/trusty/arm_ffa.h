@@ -55,6 +55,11 @@
 
 #define FFA_PAGE_SIZE (4096)
 
+#define FFA_PACK_SRC_DST(src_id, dst_id) (((uint32_t)src_id << 16) | dst_id)
+#define FFA_PACK_DST_CPU(dst_id, cpu_id) (((uint32_t)dst_id << 16) | cpu_id)
+
+#define FFA_PACK_RXTX_UNMAP_ID(vm_id) (((uint32_t)vm_id << 16) | 0)
+
 /**
  * typedef ffa_endpoint_id16_t - Endpoint ID
  *
@@ -282,6 +287,25 @@ struct ffa_mem_relinquish_descriptor {
 STATIC_ASSERT(sizeof(struct ffa_mem_relinquish_descriptor) == 16);
 
 /**
+ * struct ffa_partition_info - FFA partition info descriptor.
+ * @id:
+ *         16-bit ID of the partition
+ * @execution_ctx_count:
+ *         Number of execution contexts implemented by this partition
+ * @properties:
+ *         Flags to determine partition properties. Like direct/indirect
+ *         messages send/receive capabilities.
+ */
+struct ffa_partition_info {
+    uint16_t id;
+    uint16_t execution_ctx_count;
+    uint32_t properties;
+};
+
+/* partition property: Supports receipt of direct requests */
+#define FFA_PARTITION_DIRECT_REQ_RECV (1U << 0)
+
+/**
  * typedef ffa_features2_t - FFA_FEATURES values returned in w2
  *
  * * @FFA_FEATURES2_RXTX_MAP_BUF_SIZE_MASK
@@ -390,6 +414,16 @@ enum ffa_error {
 #define SMC_FC64_FFA_SUCCESS SMC_FASTCALL64_NR_SHARED_MEMORY(0x61)
 
 /**
+ * SMC_FC_FFA_INTERRUPT - 32 bit SMC for FFA interrupt opcode
+ *
+ * Register arguments:
+ *
+ * * w1:     VMID in [31:16], vCPU in [15:0]
+ * * w2:     Interrupt ID
+ */
+#define SMC_FC_FFA_INTERRUPT SMC_FASTCALL_NR_SHARED_MEMORY(0x62)
+
+/**
  * SMC_FC_FFA_VERSION - SMC opcode to return supported FF-A version
  *
  * Register arguments:
@@ -429,6 +463,20 @@ enum ffa_error {
  *           %FFA_ERROR_INVALID_PARAMETERS if function id is not valid.
  */
 #define SMC_FC_FFA_FEATURES SMC_FASTCALL_NR_SHARED_MEMORY(0x64)
+
+/**
+ * SMC_FC_FFA_RX_RELEASE - SMC opcode to Relinquish ownership of a RX buffer
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_SUCCESS
+ *
+ * or
+ *
+ * * w0:     &SMC_FC_FFA_ERROR
+ * * w2:     %FFA_ERROR_DENIED Caller did not have ownership of the RX buffer.
+ *           %FFA_ERROR_NOT_SUPPORTED if operation not supported
+ */
+#define SMC_FC_FFA_RX_RELEASE SMC_FASTCALL_NR_SHARED_MEMORY(0x65)
 
 /**
  * SMC_FC_FFA_RXTX_MAP - 32 bit SMC opcode to map message buffers
@@ -471,6 +519,18 @@ enum ffa_error {
 #define SMC_FC_FFA_RXTX_UNMAP SMC_FASTCALL_NR_SHARED_MEMORY(0x67)
 
 /**
+ * SMC_FC_FFA_PARTITION_INFO_GET - SMC opcode to get partition details
+ *
+ * Register arguments:
+ * * w1-w4:  Partition's UUID
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_SUCCESS
+ * * w2:     ID in bit[15:0], bit[31:16] must be 0.
+ */
+#define SMC_FC_FFA_PARTITION_INFO_GET SMC_FASTCALL_NR_SHARED_MEMORY(0x68)
+
+/**
  * SMC_FC_FFA_ID_GET - SMC opcode to get endpoint id of caller
  *
  * Return:
@@ -478,6 +538,62 @@ enum ffa_error {
  * * w2:     ID in bit[15:0], bit[31:16] must be 0.
  */
 #define SMC_FC_FFA_ID_GET SMC_FASTCALL_NR_SHARED_MEMORY(0x69)
+
+/**
+ * SMC_FC_FFA_MSG_WAIT - 32 bit SMC opcode to used by the Receiver when
+ * it transfers execution back to the Sender.
+ *
+ * Register arguments:
+ * * w2:     Flags
+ */
+#define SMC_FC_FFA_MSG_WAIT SMC_FASTCALL_NR_SHARED_MEMORY(0x6B)
+
+/**
+ * SMC_FC_FFA_RUN - 32 bit SMC opcode to used by the Sender to resume a
+ * preempted Receiver.
+ *
+ * Register arguments:
+ * * w1:     Information to identify target SP/VM.
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_SUCCESS, &SMC_FC_FFA_MSG_WAIT, or &SMC_FC_FFA_ERROR
+ */
+#define SMC_FC_FFA_RUN SMC_FASTCALL_NR_SHARED_MEMORY(0x6D)
+
+/**
+ * SMC_FC_FFA_MSG_SEND_DIRECT_REQ - 32 bit SMC opcode to send message as a
+ * request to a receiver endpoint.
+ *
+ * Register arguments
+ * * w1:     Sender and Receiver endpoint IDs.
+ * * w2:     Message flags.
+ *           bit[31]   : Message type. 0 for partition message and 1 for
+ *                       framework message.
+ *           bit[30:8] : Reserved. Must be 0.
+ *           bit[7:0]  : Framework message type. Must be 0 if partition message.
+ * * w3-w7:  Implementation defined.
+ *
+ * Return:
+ * * w0:     &SMC_FC_FFA_MSG_SEND_DIRECT_RESP or &SMC_FC_FFA_INTERRUPT or
+ *           &SMC_FC_FFA_SUCCESS
+ */
+#define SMC_FC_FFA_MSG_SEND_DIRECT_REQ SMC_FASTCALL_NR_SHARED_MEMORY(0x6F)
+
+/**
+ * SMC_FC_FFA_MSG_SEND_DIRECT_RESP - 32 SMC opcode to send message as a response
+ * to a target endpoint.
+ *
+ * Register arguments:
+ *
+ * * w1:     Sender ID in bit[31:16], receiver ID in [15:0]
+ * * w2:     Message Flags.
+ *           bit[31]   : Message type. 0 for partition message and 1 for
+ *                       framework message.
+ *           bit[30:8] : Reserved. Must be 0.
+ *           bit[7:0]  : Framework message type. Must be 0 if partition message.
+ * * w3-w7:  Implementation defined.
+ */
+#define SMC_FC_FFA_MSG_SEND_DIRECT_RESP SMC_FASTCALL_NR_SHARED_MEMORY(0x70)
 
 /**
  * SMC_FC_FFA_MEM_DONATE - 32 bit SMC opcode to donate memory
