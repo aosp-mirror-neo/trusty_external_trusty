@@ -22,14 +22,13 @@
  * SOFTWARE.
  */
 
-#ifndef TRUSTY_INTERFACE_STORAGE_H_
-#define TRUSTY_INTERFACE_STORAGE_H_
-
 /*
  * The contents of this file are copied from
  * trusty/lib/interface/storage/include/interface/storage/storage.h.
  * It is required to stay in sync for struct formats and enum values.
  */
+
+#pragma once
 
 #include <trusty/sysdeps.h>
 
@@ -56,6 +55,10 @@ enum storage_cmd {
 
     /* transaction support */
     STORAGE_END_TRANSACTION = 9 << STORAGE_REQ_SHIFT,
+
+    STORAGE_FILE_MOVE = 10 << STORAGE_REQ_SHIFT,
+    STORAGE_FILE_LIST = 11 << STORAGE_REQ_SHIFT,
+    STORAGE_FILE_GET_MAX_SIZE = 12 << STORAGE_REQ_SHIFT,
 };
 
 /**
@@ -77,6 +80,20 @@ enum storage_cmd {
  *                              current transaction is in error state. Such
  *                              state could be only cleared by sending
  *                              STORAGE_END_TRANSACTION message.
+ * @STORAGE_ERR_SYNC_FAILURE    indicates that the current operation failed to
+ *                              sync to disk. Only returned if
+ *                              STORAGE_MSG_FLAG_PRE_COMMIT or
+ *                              STORAGE_MSG_FLAG_POST_COMMIT was set for the
+ *                              request.
+ * @STORAGE_ERR_NOT_ALLOWED     operation is not allowed in the current state
+ * @STORAGE_ERR_CORRUPTED       requested operation touches a corrupted block
+ *                              and is not allowed
+ * @STORAGE_ERR_FS_REPAIRED     filesystem has been repaired in a way that may
+ *                              affect the requested operation. The requested
+ *                              operation is not allowed without acknowledging
+ *                              the repaired state. Pass
+ *                              STORAGE_MSG_FLAGS_FS_REPAIRED_ACK if a repaired
+ *                              filesystem state is acceptable.
  */
 enum storage_err {
     STORAGE_NO_ERROR = 0,
@@ -87,34 +104,62 @@ enum storage_err {
     STORAGE_ERR_NOT_FOUND = 5,
     STORAGE_ERR_EXIST = 6,
     STORAGE_ERR_TRANSACT = 7,
+    STORAGE_ERR_SYNC_FAILURE = 8,
+    STORAGE_ERR_NOT_ALLOWED = 9,
+    STORAGE_ERR_CORRUPTED = 10,
+    STORAGE_ERR_FS_REPAIRED = 11,
 };
 
 /**
  * enum storage_msg_flag - protocol-level flags in struct storage_msg
- * @STORAGE_MSG_FLAG_BATCH:             if set, command belongs to a batch
- *                                      transaction. No response will be sent by
- *                                      the server until it receives a command
- *                                      with this flag unset, at which point a
- *                                      cummulative result for all messages sent
- *                                      with STORAGE_MSG_FLAG_BATCH will be
- *                                      sent. This is only supported by the
- *                                      non-secure disk proxy server.
- * @STORAGE_MSG_FLAG_PRE_COMMIT:        if set, indicates that server need to
- *                                      commit pending changes before processing
- *                                      this message.
- * @STORAGE_MSG_FLAG_POST_COMMIT:       if set, indicates that server need to
- *                                      commit pending changes after processing
- *                                      this message.
- * @STORAGE_MSG_FLAG_TRANSACT_COMPLETE: if set, indicates that server need to
- *                                      commit current transaction after
- *                                      processing this message. It is an alias
- *                                      for STORAGE_MSG_FLAG_POST_COMMIT.
+ * @STORAGE_MSG_FLAG_BATCH:                 if set, command belongs to a batch
+ *                                          transaction. No response will be
+ *                                          sent by the server until it receives
+ *                                          a command with this flag unset, at
+ *                                          which point a cumulative result for
+ *                                          all messages sent with
+ *                                          STORAGE_MSG_FLAG_BATCH will be sent.
+ *                                          This is only supported by the
+ *                                          non-secure disk proxy server.
+ * @STORAGE_MSG_FLAG_PRE_COMMIT:            if set, indicates that server need
+ *                                          to commit pending changes before
+ *                                          processing this message.
+ * @STORAGE_MSG_FLAG_POST_COMMIT:           if set, indicates that server need
+ *                                          to commit pending changes after
+ *                                          processing this message.
+ * @STORAGE_MSG_FLAG_TRANSACT_COMPLETE:     if set, indicates that server need
+ *                                          to commit current transaction after
+ *                                          processing this message. It is an
+ *                                          alias for
+ *                                          STORAGE_MSG_FLAG_POST_COMMIT.
+ * @STORAGE_MSG_FLAG_PRE_COMMIT_CHECKPOINT: if set, indicates that server needs
+ *                                          to ensure that there is not a
+ *                                          pending checkpoint for the
+ *                                          underlying userdata filesystem
+ *                                          before processing this message.
+ * @STORAGE_MSG_FLAG_TRANSACT_CHECKPOINT:   if set, update the current
+ *                                          checkpoint to the new state of
+ *                                          files modified by this
+ *                                          transaction. Only valid along with
+ *                                          @STORAGE_MSG_FLAG_TRANSACT_COMPLETE,
+ *                                          and only allowed when provisiong is
+ *                                          allowed by the system state service.
+ * @STORAGE_MSG_FLAG_FS_REPAIRED_ACK:       acknowledge that an error in the
+ *                                          file system may have been repaired,
+ *                                          and therefore rollback may have
+ *                                          occurred. Do not use this flag
+ *                                          unless accessing files where partial
+ *                                          rollback of file system state is
+ *                                          acceptable.
  */
 enum storage_msg_flag {
     STORAGE_MSG_FLAG_BATCH = 0x1,
     STORAGE_MSG_FLAG_PRE_COMMIT = 0x2,
     STORAGE_MSG_FLAG_POST_COMMIT = 0x4,
     STORAGE_MSG_FLAG_TRANSACT_COMPLETE = STORAGE_MSG_FLAG_POST_COMMIT,
+    STORAGE_MSG_FLAG_PRE_COMMIT_CHECKPOINT = 0x8,
+    STORAGE_MSG_FLAG_TRANSACT_CHECKPOINT = 0x10,
+    STORAGE_MSG_FLAG_FS_REPAIRED_ACK = 0x20,
 };
 
 /*
@@ -144,10 +189,16 @@ struct storage_rpmb_send_req {
 /**
  * struct storage_rpmb_send_resp: response type for STORAGE_RPMB_SEND
  * @data: the data frames frames retrieved from the MMC.
+ *
+ * This struct definition is only safe to use in C since empty structs have
+ * different sizes in C(0) and C++(1) which makes them unsafe to be used
+ * across languages
  */
+#ifndef __cplusplus
 struct storage_rpmb_send_resp {
     uint8_t data[0];
 };
+#endif
 
 /**
  * struct storage_msg - generic req/resp format for all storage commands
@@ -169,5 +220,3 @@ struct storage_msg {
     uint32_t __reserved;
     uint8_t payload[0];
 };
-
-#endif /* TRUSTY_INTERFACE_STORAGE_H_ */
