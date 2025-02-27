@@ -165,3 +165,31 @@ void trusty_free_pages(void* va, unsigned count) {
      */
     trusty_abort();
 }
+
+bool trusty_has_possible_data_checkpoint(void) {
+    /* test-runner doesn't yet support A/B updates, so won't ever checkpoint. */
+    return false;
+}
+
+int trusty_current_boot_slot(void) {
+    /*
+     * test-runner doesn't support staging changes during A/B updates because we
+     * haven't yet set up a way for it to agree with Android on which slot it's
+     * booting into. This could cause some problems for tests (explained below).
+     * However, these are moot at the moment test-runner doesn't start its
+     * storageproxy when it's booting Android, so storage TA will never observe
+     * a mismatch.
+     *
+     * Example issue:
+     *   1. Android's storageproxyd reports that Android is updating into slot
+     *      B, so storage TA starts staging changes.
+     *   2. Storage TA writes staged changes to disk as a forward checkpoint.
+     *   3. The Android update succeeds, but Android reboots before storage TA
+     *      commits the forward checkpoint is committed.
+     *   4. Storage TA connects to test-runner's storageproxy during boot.
+     *   5. test-runner reports that boot slots are unsupported, so storage TA
+     *      fails to read from the filesystem, as it cannot validate the
+     *      forward checkpoint.
+     */
+    return -1;
+}

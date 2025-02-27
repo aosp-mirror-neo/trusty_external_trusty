@@ -92,3 +92,16 @@ void trusty_free_pages(void* va, unsigned count) {
     if (va)
         free(va);
 }
+
+bool trusty_has_possible_data_checkpoint(void) {
+    /* Conservativly report that there might be a checkpoint. */
+    return true;
+}
+
+int trusty_current_boot_slot(void) {
+    /*
+     * Report that we don't support persisting staged changes across reboots
+     * during A/B updates. In-memory staging is still possible.
+     */
+    return -1;
+}

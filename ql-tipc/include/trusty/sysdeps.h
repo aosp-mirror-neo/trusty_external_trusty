@@ -139,4 +139,15 @@ void* trusty_alloc_pages(unsigned count) TRUSTY_ATTR_WARN_UNUSED_RESULT;
  */
 void trusty_free_pages(void* vaddr, unsigned count);
 
+/*
+ * Whether it's possible that there is an active checkpoint
+ */
+bool trusty_has_possible_data_checkpoint(void);
+
+/*
+ * Get the current boot slot. Should return the same as
+ * IBootControl::getCurrentSlot
+ */
+int trusty_current_boot_slot(void);
+
 #endif /* TRUSTY_SYSDEPS_H_ */

@@ -154,6 +154,15 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan* chan,
         }
     }
 
+    if (msg->flags & STORAGE_MSG_FLAG_PRE_COMMIT_CHECKPOINT &&
+        trusty_has_possible_data_checkpoint()) {
+        trusty_error(
+                "%s: pre-commit checkpoint requested, but there may be a data checkpoint active\n",
+                __func__);
+        msg->result = STORAGE_ERR_GENERIC;
+        goto err_response;
+    }
+
     /* execute rpmb command */
     rc = rpmb_storage_send(proxy_rpmb, rel_write_data, req->reliable_write_size,
                            write_data, req->write_size, read_buf,
@@ -173,6 +182,35 @@ static int proxy_handle_rpmb(struct trusty_ipc_chan* chan,
 
     msg->result = STORAGE_NO_ERROR;
     return proxy_send_response(chan, msg, read_buf, req->read_size);
+
+err_response:
+    return proxy_send_response(chan, msg, NULL, 0);
+}
+
+/*
+ * Gets the checkpoint state, sends response to storage service.
+ *
+ * @chan:    proxy ipc channel
+ * @msg:     address of storage message header
+ * @req:     unused
+ * @req_len: length of req in bytes; should be zero
+ */
+static int proxy_handle_checkpoint_state(struct trusty_ipc_chan* chan,
+                                         struct storage_msg* msg,
+                                         const void* req,
+                                         size_t req_len) {
+    if (req_len > 0) {
+        msg->result = STORAGE_ERR_NOT_VALID;
+        goto err_response;
+    }
+
+    struct storage_checkpointing_state_resp resp;
+    resp.state = trusty_has_possible_data_checkpoint()
+                         ? STORAGE_CHECKPOINT_STATE_POSSIBLE
+                         : STORAGE_CHECKPOINT_STATE_DONE;
+    resp.boot_slot = trusty_current_boot_slot();
+
+    return proxy_send_response(chan, msg, &resp, sizeof(resp));
 
 err_response:
     return proxy_send_response(chan, msg, NULL, 0);
@@ -199,6 +237,10 @@ static int proxy_handle_req(struct trusty_ipc_chan* chan,
     switch (msg->cmd) {
     case STORAGE_RPMB_SEND:
         rc = proxy_handle_rpmb(chan, msg, req, req_len);
+        break;
+
+    case STORAGE_CHECKPOINTING_STATE:
+        rc = proxy_handle_checkpoint_state(chan, msg, req, req_len);
         break;
 
     case STORAGE_FILE_DELETE:
