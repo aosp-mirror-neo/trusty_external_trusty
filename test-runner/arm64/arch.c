@@ -32,9 +32,14 @@
 #include <trusty/smcall.h>
 #include <trusty/trusty_dev.h>
 
-#if GIC_VERSION > 2
 #define GICD_BASE (0x08000000)
 #define GICD_CTLR (GICD_BASE + 0x000)
+#define GICD_ISENABLER0 (GICD_BASE + 0x100)
+
+#define GICD_CTLR_ARE_NS (1U << 4)
+
+#define GICC_BASE (0x08010000)
+#define GICC_CTLR (GICC_BASE + 0x000)
 
 #define GICR_BASE (0x080A0000)
 #define GICR_SGI_BASE (GICR_BASE + 0x10000)
@@ -45,17 +50,29 @@
 #define GICDREG_READ(reg) (*REG32((reg)))
 #define GICDREG_WRITE(reg, val) (*REG32((reg)) = (val))
 
+#define GICCREG_READ(reg) (*REG32((reg)))
+#define GICCREG_WRITE(reg, val) (*REG32((reg)) = (val))
+
 #define GICRREG_READ(cpu, reg) (*REG32((reg) + GICR_CPU_OFFSET(cpu)))
 #define GICRREG_WRITE(cpu, reg, val) \
     (*REG32((reg) + GICR_CPU_OFFSET(cpu)) = (val))
 
 static uint32_t doorbell_irq;
-#endif
 
 int arch_gic_init(struct trusty_dev* trusty_dev, int cpu) {
-#if GIC_VERSION > 2
     if (!cpu) {
-        GICDREG_WRITE(GICD_CTLR, 2); /* Enable Non-secure group 1 interrupt */
+        uint32_t ctlr = 0x1;
+#if GIC_VERSION > 2
+        /*
+         * Affinity routing (the bit 4 ARE_NS==1 state) moves
+         * EnableGrp1 to bit 1 in GICD_CTLR. We need to check
+         * ARE_NS before setting the enable bit.
+         */
+        if (GICDREG_READ(GICD_CTLR) & GICD_CTLR_ARE_NS) {
+            ctlr = 0x2;
+        }
+#endif
+        GICDREG_WRITE(GICD_CTLR, ctlr); /* Enable Non-secure group 1 interrupt */
         doorbell_irq = trusty_fast_call32(trusty_dev, SMC_FC_GET_NEXT_IRQ, 0,
                                           TRUSTY_IRQ_TYPE_DOORBELL, 0);
     }
@@ -66,9 +83,14 @@ int arch_gic_init(struct trusty_dev* trusty_dev, int cpu) {
          */
         return -1;
     }
+#if GIC_VERSION > 2
     GICRREG_WRITE(cpu, GICR_ISENABLER0, 1U << doorbell_irq);
     GICRREG_WRITE(cpu, GICR_ISENABLER0, 1U << 0); /* skip_cpu0_wfi interrupt */
     __asm__ volatile("msr icc_igrpen1_el1, %0" ::"r"(1UL));
+#else
+    GICDREG_WRITE(GICD_ISENABLER0, 1U << doorbell_irq);
+    GICDREG_WRITE(GICD_ISENABLER0, 1U << 0);
+    GICCREG_WRITE(GICC_CTLR, 0x1);
 #endif
 
     return 0;
