@@ -30,6 +30,10 @@
 #define GICD_BASE (0x08000000)
 #define GICD_SGIR (0xf00)
 
+#define GICC_BASE (0x08010000)
+#define GICC_IAR  (0x00c)
+#define GICC_EOIR (0x010)
+
 .macro get_cpu_num, reg
     /* Get cpu number */
     mrs \reg, mpidr_el1
@@ -131,9 +135,9 @@ trusty_idle:
     ldr x4, =(0 << 24) | 1
     msr icc_sgi1r_el1, x4
 #else
-    // Send int 15 to cpu 0 to take it out of wfi
+    // Send int 0 to cpu 0 to take it out of wfi
     ldr x3, =GICD_BASE
-    ldr x4, =0x1800f
+    ldr x4, =0x18000
     str x4, [x3, GICD_SGIR]
 #endif
 
@@ -155,21 +159,34 @@ trusty_get_cpu_num:
     get_cpu_num x0
     ret
 
-#if GIC_VERSION > 2
 .globl trusty_local_irq_disable
 trusty_local_irq_disable:
     /*
      * Clear doorbell interrupt from trusty or ipi sent from secondary cores in
      * trusty_idle above.
      */
+#if GIC_VERSION > 2
     mrs x0, icc_iar1_el1
-    cmp x0, #1020
-    b.hs .trusty_local_irq_disable_done
+#else
+    ldr x1, =GICC_BASE
+    ldr x0, [x1, GICC_IAR]
+#endif
+    /*
+     * Check if x0 is between 1020 and 1023
+     * which is equivalent to an unsigned check
+     * whether (x0 - 1020) <= 3 (with underflow)
+     */
+    sub x2, x0, #1020
+    cmp x2, #(1023 - 1020)
+    b.ls .trusty_local_irq_disable_done
+#if GIC_VERSION > 2
     msr icc_eoir1_el1, x0
+#else
+    str x0, [x1, GICC_EOIR]
+#endif
     b trusty_local_irq_disable
 .trusty_local_irq_disable_done:
     ret
-#endif
 
 .globl arch_start_secondary_cpus
 arch_start_secondary_cpus:
