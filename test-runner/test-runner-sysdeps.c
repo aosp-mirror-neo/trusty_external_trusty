@@ -25,11 +25,12 @@
 #include <test-runner-arch.h>
 #include <trusty/sysdeps.h>
 
+#define HEAP_ALLOC_ALIGNMENT (8U)
 /* Size limits for bump allocators (trusty_calloc and trusty_alloc_pages) */
 #define HEAP_SIZE (56 + 6 * 4)
 #define PAGE_COUNT (3)
 
-static uint8_t heap[HEAP_SIZE];
+static uint8_t heap[HEAP_SIZE] __ALIGNED(HEAP_ALLOC_ALIGNMENT);
 static int heap_allocated = 0;
 
 static uint8_t pages[PAGE_COUNT * PAGE_SIZE] __ALIGNED(PAGE_SIZE);
@@ -135,6 +136,8 @@ int trusty_strcmp(const char* str1, const char* str2) {
 void* trusty_calloc(size_t n, size_t size) {
     void* ret;
     size_t asize = n * size;
+    /* Align up to prevent unaligned reads/writes */
+    asize = (asize + HEAP_ALLOC_ALIGNMENT - 1) & ~(HEAP_ALLOC_ALIGNMENT - 1U);
     if (heap_allocated + asize > HEAP_SIZE) {
         return NULL;
     }

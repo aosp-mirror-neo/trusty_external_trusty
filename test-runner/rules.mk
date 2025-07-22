@@ -79,5 +79,9 @@ MODULE_ADD_IMPLICIT_DEPS := false
 
 MODULE_COMPILEFLAGS += -fno-builtin
 
+# qemu 9.0+ started enforcing alignment on memory accesses from EL2
+# See https://gitlab.com/qemu-project/qemu/-/issues/1204
+MODULE_COMPILEFLAGS += -mno-unaligned-access
+
 include $(LOCAL_DIR)/$(ARCH)/rules.mk
 include make/trusted_app.mk

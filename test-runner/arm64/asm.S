@@ -138,7 +138,7 @@ trusty_idle:
     // Send int 0 to cpu 0 to take it out of wfi
     ldr x3, =GICD_BASE
     ldr x4, =0x18000
-    str x4, [x3, GICD_SGIR]
+    str w4, [x3, GICD_SGIR]
 #endif
 
     cbnz x1, no_wfi // also use event_poll to skip wfi on secondary cpus
@@ -169,7 +169,7 @@ trusty_local_irq_disable:
     mrs x0, icc_iar1_el1
 #else
     ldr x1, =GICC_BASE
-    ldr x0, [x1, GICC_IAR]
+    ldr w0, [x1, GICC_IAR]
 #endif
     /*
      * Check if x0 is between 1020 and 1023
@@ -182,7 +182,7 @@ trusty_local_irq_disable:
 #if GIC_VERSION > 2
     msr icc_eoir1_el1, x0
 #else
-    str x0, [x1, GICC_EOIR]
+    str w0, [x1, GICC_EOIR]
 #endif
     b trusty_local_irq_disable
 .trusty_local_irq_disable_done:
