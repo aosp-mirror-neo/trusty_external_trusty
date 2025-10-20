@@ -204,10 +204,14 @@ static int proxy_handle_req(struct trusty_ipc_chan* chan,
     case STORAGE_FILE_DELETE:
     case STORAGE_FILE_OPEN:
     case STORAGE_FILE_CLOSE:
-    case STORAGE_FILE_WRITE:
     case STORAGE_FILE_READ:
+    case STORAGE_FILE_WRITE:
     case STORAGE_FILE_GET_SIZE:
     case STORAGE_FILE_SET_SIZE:
+    case STORAGE_END_TRANSACTION:
+    case STORAGE_FILE_MOVE:
+    case STORAGE_FILE_LIST:
+    case STORAGE_FILE_GET_MAX_SIZE:
         /* Bulk filesystem is not supported */
         msg->result = STORAGE_ERR_UNIMPLEMENTED;
         rc = proxy_send_response(chan, msg, NULL, 0);
