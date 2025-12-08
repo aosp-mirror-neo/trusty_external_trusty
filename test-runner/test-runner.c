@@ -139,6 +139,7 @@ void boot(int cpu) {
         return;
     }
 
+#if STORAGE_HAS_RPMB
     /* If we don't have a VirtIO RPMB device, skip storage proxy */
     if (!init_virtio_rpmb(console)) {
         if (rpmb_storage_proxy_init(ipc_dev, NULL)) {
@@ -148,6 +149,7 @@ void boot(int cpu) {
     } else {
         log_msg("Could not find serial port rpmb0, skipping storage proxy.\n");
     }
+#endif
 
     /*
      * Check that keymaster can at least be connected to.

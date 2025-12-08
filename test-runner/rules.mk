@@ -39,6 +39,11 @@ MODULE_DISABLE_SCS := true
 
 QL_TIPC = $(LOCAL_DIR)/../ql-tipc
 
+# If the build supports RPMB start the proxy.
+ifeq (true,$(call TOBOOL,$(STORAGE_HAS_RPMB)))
+    MODULE_DEFINES += STORAGE_HAS_RPMB=1
+endif
+
 MODULE_DEFINES += \
 	NS_ARCH_ARM64=1 \
 
